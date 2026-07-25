@@ -59,6 +59,7 @@ rm -f "$RES/default_app.asar"
 
 mkdir -p "$RES/app/electron"
 cp electron/main.js "$RES/app/electron/main.js"
+cp electron/preload.js "$RES/app/electron/preload.js"
 cp scripts/mock-comfy-standalone.mjs "$RES/app/electron/mock-backend.mjs"
 cp -r out "$RES/app/out"
 cat > "$RES/app/package.json" <<'EOF'

@@ -2,9 +2,11 @@
 // in-process HTTP server on a random localhost port, then opens it in a
 // BrowserWindow. No external dependencies beyond Electron itself.
 
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { execFile, execFileSync } = require('node:child_process');
 const http = require('node:http');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -54,6 +56,57 @@ function resolveFile(urlPath) {
   return path.join(OUT_DIR, '404.html');
 }
 
+// ── Optional FFmpeg finalize pass for editor exports ────────────────────────
+// If the machine has ffmpeg (PATH or FFMPEG_PATH), the editor offers a
+// "max compatibility" re-encode: H.264 yuv420p + AAC + faststart.
+
+let ffmpegPath;
+function findFfmpeg() {
+  if (ffmpegPath !== undefined) return ffmpegPath;
+  const candidates = [process.env.FFMPEG_PATH, 'ffmpeg'].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ['-version'], { stdio: 'ignore', timeout: 5000 });
+      ffmpegPath = candidate;
+      return ffmpegPath;
+    } catch {
+      /* keep looking */
+    }
+  }
+  ffmpegPath = null;
+  return ffmpegPath;
+}
+
+ipcMain.handle('ffmpeg-available', () => findFfmpeg() !== null);
+
+ipcMain.handle('ffmpeg-finalize', async (_event, mp4) => {
+  const bin = findFfmpeg();
+  if (!bin || !mp4) return null;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frameforge-'));
+  const input = path.join(dir, 'in.mp4');
+  const output = path.join(dir, 'out.mp4');
+  try {
+    fs.writeFileSync(input, Buffer.from(mp4));
+    await new Promise((resolve, reject) => {
+      execFile(
+        bin,
+        ['-y', '-i', input, '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+         '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k',
+         '-movflags', '+faststart', output],
+        { timeout: 10 * 60 * 1000 },
+        (err) => (err ? reject(err) : resolve())
+      );
+    });
+    const bytes = fs.readFileSync(output);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  } catch (e) {
+    console.error('[FrameForge] ffmpeg finalize failed:', e.message);
+    return null;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function startServer() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
@@ -94,6 +147,7 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 

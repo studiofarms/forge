@@ -14,6 +14,7 @@ const NAV = [
   { href: '/studio/', label: 'Studio', icon: '✦' },
   { href: '/queue/', label: 'Queue', icon: '≡' },
   { href: '/gallery/', label: 'Gallery', icon: '▣' },
+  { href: '/editor/', label: 'Editor', icon: '✂' },
   { href: '/connect/', label: 'Connect', icon: '⌁' },
   { href: '/settings/', label: 'Settings', icon: '⚙' },
 ];
