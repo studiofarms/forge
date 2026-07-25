@@ -1,0 +1,116 @@
+{
+  "checkpoint": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ltx-video-2b-v0.9.5.safetensors" },
+    "_meta": { "title": "Load LTX-Video Checkpoint" }
+  },
+  "clip": {
+    "class_type": "CLIPLoader",
+    "inputs": { "clip_name": "t5xxl_fp8_e4m3fn_scaled.safetensors", "type": "ltxv" },
+    "_meta": { "title": "Load T5 Text Encoder" }
+  },
+  "positive": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "", "clip": ["clip", 0] },
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "negative": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "", "clip": ["clip", 0] },
+    "_meta": { "title": "Negative Prompt" }
+  },
+  "source_image": {
+    "class_type": "LoadImage",
+    "inputs": { "image": "" },
+    "_meta": { "title": "Source Image" }
+  },
+  "img_to_video": {
+    "class_type": "LTXVImgToVideo",
+    "inputs": {
+      "positive": ["positive", 0],
+      "negative": ["negative", 0],
+      "vae": ["checkpoint", 2],
+      "image": ["source_image", 0],
+      "width": 768,
+      "height": 512,
+      "length": 97,
+      "batch_size": 1,
+      "strength": 0.9,
+      "crop": "center"
+    },
+    "_meta": { "title": "Image To Video Latent" }
+  },
+  "conditioning": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": ["img_to_video", 0],
+      "negative": ["img_to_video", 1],
+      "frame_rate": 24
+    },
+    "_meta": { "title": "LTXV Conditioning" }
+  },
+  "scheduler": {
+    "class_type": "LTXVScheduler",
+    "inputs": {
+      "steps": 25,
+      "max_shift": 2.05,
+      "base_shift": 0.95,
+      "stretch": true,
+      "terminal": 0.1,
+      "latent": ["img_to_video", 2]
+    },
+    "_meta": { "title": "LTXV Scheduler" }
+  },
+  "sampler_select": {
+    "class_type": "KSamplerSelect",
+    "inputs": { "sampler_name": "euler" },
+    "_meta": { "title": "Sampler" }
+  },
+  "guider": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": ["checkpoint", 0],
+      "positive": ["conditioning", 0],
+      "negative": ["conditioning", 1],
+      "cfg": 3.0
+    },
+    "_meta": { "title": "CFG Guider" }
+  },
+  "noise": {
+    "class_type": "RandomNoise",
+    "inputs": { "noise_seed": 0 },
+    "_meta": { "title": "Noise Seed" }
+  },
+  "sampler": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["noise", 0],
+      "guider": ["guider", 0],
+      "sampler": ["sampler_select", 0],
+      "sigmas": ["scheduler", 0],
+      "latent_image": ["img_to_video", 2]
+    },
+    "_meta": { "title": "Sample" }
+  },
+  "decode": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["sampler", 0], "vae": ["checkpoint", 2] },
+    "_meta": { "title": "VAE Decode" }
+  },
+  "save": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["decode", 0],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "frameforge",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "pingpong": false,
+      "save_output": true
+    },
+    "_meta": { "title": "Save MP4" }
+  }
+}

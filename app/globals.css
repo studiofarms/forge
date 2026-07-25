@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-ink-950 text-ink-200;
+  }
+  body {
+    @apply font-body antialiased min-h-screen;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(139, 92, 246, 0.12), transparent),
+      radial-gradient(900px 500px at -10% 110%, rgba(34, 211, 238, 0.08), transparent),
+      theme('colors.ink.950');
+  }
+  ::selection {
+    @apply bg-brand-600/60 text-white;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-ink-700/60 bg-ink-900/80 backdrop-blur-sm;
+  }
+  .input {
+    @apply w-full rounded-xl border border-ink-700 bg-ink-850 px-3.5 py-2.5 text-sm text-ink-200
+      placeholder:text-ink-600 outline-none transition
+      focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-400;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+      transition disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white shadow-lg shadow-brand-600/25 hover:bg-brand-500;
+  }
+  .btn-secondary {
+    @apply btn border border-ink-600 bg-ink-800 text-ink-200 hover:border-ink-400 hover:bg-ink-700;
+  }
+  .btn-ghost {
+    @apply btn text-ink-300 hover:bg-ink-800 hover:text-white;
+  }
+  .btn-danger {
+    @apply btn border border-red-900/60 bg-red-950/40 text-red-300 hover:bg-red-900/40;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+}
+
+/* Range inputs */
+input[type='range'] {
+  @apply h-1.5 w-full cursor-pointer appearance-none rounded-full bg-ink-700 accent-brand-500;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.ink.700') transparent;
+}

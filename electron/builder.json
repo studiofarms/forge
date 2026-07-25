@@ -1,0 +1,39 @@
+{
+  "appId": "com.frameforge.studio",
+  "productName": "FrameForge",
+  "electronVersion": "33.2.0",
+  "directories": {
+    "output": "dist",
+    "buildResources": "electron/resources"
+  },
+  "files": [
+    "electron/main.js",
+    "electron/mock-backend.mjs",
+    "out/**/*",
+    "package.json",
+    "!node_modules/**"
+  ],
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ],
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": true,
+    "deleteAppDataOnUninstall": false,
+    "artifactName": "FrameForge-Setup-${version}.${ext}"
+  },
+  "portable": {
+    "artifactName": "FrameForge-Portable-${version}.${ext}"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Video"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.video"
+  }
+}

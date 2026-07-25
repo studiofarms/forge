@@ -1,0 +1,7 @@
+# Windows batch launchers must keep CRLF line endings byte-for-byte —
+# cmd.exe mis-parses LF-only batch files (goto/labels silently break).
+*.cmd -text
+*.bat -text
+
+# Shell scripts must stay LF even when checked out on Windows.
+*.sh text eol=lf

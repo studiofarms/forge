@@ -1,0 +1,48 @@
+{
+  "name": "frameforge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FrameForge — free AI video studio with brand-kit-driven content generation",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev -p 3999",
+    "build": "next build",
+    "start": "next start -p 3999",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "mock-comfy": "node scripts/mock-comfy.mjs",
+    "package:cmd": "npm run build && node scripts/package-cmd.mjs",
+    "package:mac": "npm run build && node scripts/package-mac.mjs",
+    "package:mac-app": "npm run build && node scripts/package-mac-app.mjs",
+    "desktop": "npm run build && npx --yes electron@33.2.0 electron/main.js",
+    "predist:copy": "node -e \"require('fs').copyFileSync('scripts/mock-comfy-standalone.mjs','electron/mock-backend.mjs')\"",
+    "dist:win": "npm run build && npm run predist:copy && npx --yes electron-builder@25.1.8 --win --config electron/builder.json",
+    "dist:linux": "npm run build && npx --yes electron-builder@25.1.8 --linux --config electron/builder.json",
+    "dist:mac": "npm run build && npx --yes electron-builder@25.1.8 --mac --config electron/builder.json"
+  },
+  "dependencies": {
+    "dexie": "^4.0.8",
+    "jszip": "^3.10.1",
+    "next": "^14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/ws": "^8.5.10",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.5",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {},
+  "browserslist": [
+    "defaults"
+  ]
+}

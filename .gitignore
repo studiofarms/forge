@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+release/mac-app/
+.cache-mac/
+release/FrameForge-Mac-*.zip
+electron/mock-backend.mjs
