@@ -29,6 +29,8 @@ export interface Job {
   imageName?: string; // server-side name for i2v (set after upload)
   /** Brand asset to upload lazily at submit time for i2v jobs. */
   assetId?: string;
+  /** Staged image (user upload / extracted frame) to upload at submit time. */
+  stagedImageId?: string;
   imageStrength?: number;
   brandKitId?: string;
   brandKitName?: string;
@@ -80,20 +82,23 @@ export const useJobStore = create<JobStoreState>((set, get) => {
     const client = useConnectionStore.getState().getClient();
     if (!client) return; // stay in draft; the loop pauses until reconnect
 
-    // i2v jobs reference a brand asset; upload it now that we have a backend.
+    // i2v jobs reference a brand asset or a staged image; upload it now that
+    // we have a backend.
     let imageName = job.imageName;
-    if (job.mode === 'i2v' && !imageName && job.assetId) {
+    if (job.mode === 'i2v' && !imageName && (job.assetId || job.stagedImageId)) {
       try {
-        const row = await db.brandAssetBlobs.get(job.assetId);
-        if (!row) throw new Error('Brand asset no longer exists.');
-        const uploaded = await client.uploadImage(row.blob, `ff-${job.assetId}.png`);
+        const row = job.stagedImageId
+          ? await db.stagedImages.get(job.stagedImageId)
+          : await db.brandAssetBlobs.get(job.assetId!);
+        if (!row) throw new Error('Start image no longer exists.');
+        const uploaded = await client.uploadImage(row.blob, `ff-${job.stagedImageId ?? job.assetId}.png`);
         imageName = uploaded.subfolder
           ? `${uploaded.subfolder}/${uploaded.name}`
           : uploaded.name;
         updateJob(job.id, { type: 'PROGRESS', value: 0, max: 1 }, { imageName });
       } catch (err) {
         updateJob(job.id, { type: 'SUBMIT_FAIL', error: 'upload failed' }, {
-          error: `Could not upload brand image: ${(err as Error).message}`,
+          error: `Could not upload the start image: ${(err as Error).message}`,
         });
         return;
       }

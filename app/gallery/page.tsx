@@ -3,13 +3,48 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState, Modal, PageHeader, formatAgo, formatBytes } from '@/components/ui';
 import { VideoThumb } from '@/components/gallery/VideoThumb';
+import { stageLastFrame } from '@/lib/editor/extend';
+import { DEFAULT_NEGATIVE_PROMPT } from '@/lib/comfy/buildWorkflow';
 import type { GalleryItem } from '@/lib/db';
 import { useBrandStore } from '@/lib/stores/useBrandStore';
 import { useGalleryStore } from '@/lib/stores/useGalleryStore';
+import { useJobStore } from '@/lib/stores/useJobStore';
 
 function Lightbox({ item, onClose }: { item: GalleryItem; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [extendState, setExtendState] = useState<'idle' | 'working' | 'queued' | 'error'>('idle');
   const { getObjectUrl, remove, toggleFavorite } = useGalleryStore();
+  const enqueue = useJobStore((s) => s.enqueue);
+
+  // Continue this shot from its final frame (image-to-video), Kling-style.
+  const extend = async () => {
+    setExtendState('working');
+    try {
+      const frame = await stageLastFrame(item.id);
+      enqueue({
+        prompt: `${item.prompt}, seamless continuation of the previous shot, consistent scene and lighting`,
+        negativePrompt: item.negativePrompt || DEFAULT_NEGATIVE_PROMPT,
+        mode: 'i2v',
+        stagedImageId: frame.stagedImageId,
+        imageStrength: 0.95,
+        width: item.width,
+        height: item.height,
+        durationSeconds: item.durationSeconds,
+        fps: item.fps,
+        steps: 25,
+        cfg: 3,
+        seed: (Math.floor(Math.random() * 2 ** 32)) >>> 0,
+        brandKitId: item.brandKitId,
+        brandKitName: item.brandKitName,
+        campaignLabel: 'Extended shot',
+      });
+      setExtendState('queued');
+      setTimeout(() => setExtendState('idle'), 3000);
+    } catch {
+      setExtendState('error');
+      setTimeout(() => setExtendState('idle'), 3000);
+    }
+  };
 
   useEffect(() => {
     let u: string | null = null;
@@ -61,6 +96,20 @@ function Lightbox({ item, onClose }: { item: GalleryItem; onClose: () => void })
         </button>
         <button className="btn-secondary" onClick={() => void toggleFavorite(item.id)}>
           {item.favorite ? '★ Unfavorite' : '☆ Favorite'}
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => void extend()}
+          disabled={extendState === 'working'}
+          title="Generate a new clip that continues from this clip's last frame"
+        >
+          {extendState === 'working'
+            ? '…'
+            : extendState === 'queued'
+              ? '✓ Queued'
+              : extendState === 'error'
+                ? 'Could not read clip'
+                : '⏩ Extend'}
         </button>
         <button
           className="btn-danger ml-auto"

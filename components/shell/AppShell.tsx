@@ -9,6 +9,7 @@ import { isTerminal } from '@/lib/jobs/stateMachine';
 
 const NAV = [
   { href: '/', label: 'Dashboard', icon: '◈' },
+  { href: '/create/', label: 'Create', icon: '✹' },
   { href: '/brand/', label: 'Brand Kits', icon: '⬢' },
   { href: '/generate/', label: 'Content Packs', icon: '⚡' },
   { href: '/studio/', label: 'Studio', icon: '✦' },

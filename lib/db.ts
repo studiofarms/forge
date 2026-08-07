@@ -33,12 +33,20 @@ export interface BrandAssetBlob {
   blob: Blob;
 }
 
+/** Start-frame images staged for i2v jobs (uploads, extracted last frames). */
+export interface StagedImage {
+  id: string;
+  createdAt: number;
+  blob: Blob;
+}
+
 class FrameForgeDB extends Dexie {
   galleryItems!: Table<GalleryItem, string>;
   galleryBlobs!: Table<GalleryBlob, string>;
   brandKits!: Table<BrandKit, string>;
   brandAssets!: Table<BrandAssetMeta, string>;
   brandAssetBlobs!: Table<BrandAssetBlob, string>;
+  stagedImages!: Table<StagedImage, string>;
 
   constructor() {
     super('frameforge');
@@ -48,6 +56,9 @@ class FrameForgeDB extends Dexie {
       brandKits: 'id, updatedAt',
       brandAssets: 'id, kitId, kind',
       brandAssetBlobs: 'id',
+    });
+    this.version(2).stores({
+      stagedImages: 'id, createdAt',
     });
   }
 }
@@ -76,6 +87,16 @@ export async function saveGalleryVideo(
     await db.galleryBlobs.add({ id: item.id, blob });
   });
   return item;
+}
+
+/** Stage a start-frame image for an i2v job; old stages are pruned. */
+export async function saveStagedImage(blob: Blob): Promise<string> {
+  const id = newId();
+  await db.stagedImages.add({ id, createdAt: Date.now(), blob });
+  // Keep the table from growing forever — stages older than a week are dead.
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  await db.stagedImages.where('createdAt').below(cutoff).delete();
+  return id;
 }
 
 export async function deleteGalleryItem(id: string): Promise<void> {

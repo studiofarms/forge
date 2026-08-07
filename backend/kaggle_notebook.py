@@ -56,6 +56,27 @@ print("═" * 60)
 print(" FrameForge backend boot")
 print("═" * 60)
 
+# ── 0. Internet check (Kaggle's #1 gotcha) ───────────────────
+try:
+    urllib.request.urlopen("https://github.com", timeout=10)
+except Exception:
+    raise SystemExit(
+        "\n"
+        + "!" * 60
+        + "\n"
+        "  NO INTERNET ACCESS — this notebook can't download anything.\n"
+        "\n"
+        "  Fix (takes 1 minute):\n"
+        "   1. Open the panel on the RIGHT side of the notebook\n"
+        "      (click the sidebar arrow if it's collapsed)\n"
+        "   2. Under 'Session options', switch  Internet  →  ON\n"
+        "   3. If it says 'Requires phone verification':\n"
+        "      kaggle.com/settings → Phone verification, then retry\n"
+        "   4. Also set Accelerator: GPU T4 x2\n"
+        "   5. Re-run this cell\n"
+        + "!" * 60
+    )
+
 # ── 1. ComfyUI + custom nodes ────────────────────────────────
 if not os.path.isdir(COMFY):
     sh(f'git clone --depth 1 https://github.com/comfyanonymous/ComfyUI "{COMFY}"')

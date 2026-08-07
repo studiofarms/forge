@@ -10,6 +10,8 @@ import type { Project } from './timeline';
 
 export interface ClipSource {
   duration: number;
+  naturalWidth: number;
+  naturalHeight: number;
   /** Exact positioning — awaited by the exporter and the paused preview. */
   seek(t: number): Promise<void>;
   /** Best-effort positioning for the live play loop. */
@@ -43,11 +45,15 @@ function coverRect(
 
 class VideoSource implements ClipSource {
   duration: number;
+  naturalWidth: number;
+  naturalHeight: number;
   private video: HTMLVideoElement;
 
   constructor(video: HTMLVideoElement) {
     this.video = video;
     this.duration = Number.isFinite(video.duration) ? video.duration : 0;
+    this.naturalWidth = video.videoWidth || 0;
+    this.naturalHeight = video.videoHeight || 0;
   }
 
   seek(t: number): Promise<void> {
@@ -131,11 +137,15 @@ interface GifFrame {
 
 class GifSource implements ClipSource {
   duration: number;
+  naturalWidth: number;
+  naturalHeight: number;
   private frames: GifFrame[];
 
   constructor(frames: GifFrame[], duration: number) {
     this.frames = frames;
     this.duration = duration;
+    this.naturalWidth = frames[0]?.bitmap.width ?? 0;
+    this.naturalHeight = frames[0]?.bitmap.height ?? 0;
   }
 
   private frameAt(t: number): GifFrame | null {
@@ -197,7 +207,7 @@ export function isEditableMime(mime: string): boolean {
   return mime.startsWith('video/') || mime === 'image/gif';
 }
 
-async function loadSource(blob: Blob, mime: string): Promise<ClipSource> {
+export async function loadSource(blob: Blob, mime: string): Promise<ClipSource> {
   return mime === 'image/gif' ? loadGif(blob) : loadVideo(blob);
 }
 

@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Field, PageHeader, SliderField } from '@/components/ui';
 import { LIMITS, snapDimension, toFrameCount } from '@/lib/comfy/buildWorkflow';
+import { CAMERA_MOVES, STYLE_PRESETS, craftPrompt, variationSeeds } from '@/lib/comfy/promptCraft';
 import { hashString } from '@/lib/brand/contentEngine';
 import { VOICE_STYLE, colorDescription } from '@/lib/brand/types';
+import { saveStagedImage } from '@/lib/db';
 import { useBrandStore } from '@/lib/stores/useBrandStore';
 import { useConnectionStore } from '@/lib/stores/useConnectionStore';
 import { useJobStore } from '@/lib/stores/useJobStore';
@@ -17,14 +19,54 @@ const ASPECTS = [
   { id: 'portrait', label: '9:16', w: 512, h: 768 },
 ];
 
+const VARIATION_CHOICES = [1, 2, 4];
+
+function ChipRow({
+  label,
+  chips,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  chips: { id: string; label: string }[];
+  selected: string | null;
+  onToggle: (id: string | null) => void;
+}) {
+  return (
+    <div>
+      <div className="label">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onToggle(selected === c.id ? null : c.id)}
+            className={`chip border transition ${
+              selected === c.id
+                ? 'border-brand-500 bg-brand-950/60 text-brand-300'
+                : 'border-ink-700 text-ink-400 hover:border-ink-500'
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function StudioPage() {
   const settings = useSettingsStore();
   const status = useConnectionStore((s) => s.status);
-  const enqueue = useJobStore((s) => s.enqueue);
+  const enqueueMany = useJobStore((s) => s.enqueueMany);
   const { kits, activeKitId, setActiveKit, refresh, loaded } = useBrandStore();
 
   const [prompt, setPrompt] = useState('');
   const [negative, setNegative] = useState(settings.defaultNegativePrompt);
+  const [cameraId, setCameraId] = useState<string | null>(null);
+  const [styleId, setStyleId] = useState<string | null>(null);
+  const [enhance, setEnhance] = useState(false);
+  const [variations, setVariations] = useState(1);
   const [width, setWidth] = useState(settings.defaultWidth);
   const [height, setHeight] = useState(settings.defaultHeight);
   const [duration, setDuration] = useState(settings.defaultDurationSeconds);
@@ -35,44 +77,68 @@ export default function StudioPage() {
   const [brandInfuse, setBrandInfuse] = useState(true);
   const [queuedFlash, setQueuedFlash] = useState(false);
 
+  // Start image (turns the job into image-to-video, like Kling / Runway).
+  const [startImage, setStartImage] = useState<{ blob: Blob; url: string; name: string } | null>(null);
+  const [imageStrength, setImageStrength] = useState(0.9);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!loaded) void refresh();
   }, [loaded, refresh]);
 
+  useEffect(
+    () => () => {
+      if (startImage) URL.revokeObjectURL(startImage.url);
+    },
+    [startImage]
+  );
+
   const kit = kits.find((k) => k.id === activeKitId) ?? null;
 
   const finalPrompt = useMemo(() => {
-    const base = prompt.trim();
-    if (!base || !brandInfuse || !kit) return base;
+    const crafted = craftPrompt({ base: prompt, cameraId, styleId, enhance });
+    if (!crafted || !brandInfuse || !kit) return crafted;
     const extras = [VOICE_STYLE[kit.voice], colorDescription(kit.colors)]
       .filter(Boolean)
       .join(', ');
-    return `${base}, ${extras}`;
-  }, [prompt, brandInfuse, kit]);
+    return `${crafted}, ${extras}`;
+  }, [prompt, cameraId, styleId, enhance, brandInfuse, kit]);
 
   const frames = toFrameCount(duration, fps);
 
-  const generate = () => {
+  function pickImage(file: File | undefined | null) {
+    if (!file || !file.type.startsWith('image/')) return;
+    if (startImage) URL.revokeObjectURL(startImage.url);
+    setStartImage({ blob: file, url: URL.createObjectURL(file), name: file.name });
+  }
+
+  const generate = async () => {
     if (!finalPrompt) return;
-    const seed = seedText.trim()
+    const baseSeed = seedText.trim()
       ? Number.isFinite(Number(seedText))
         ? Number(seedText) >>> 0
         : hashString(seedText)
       : (Math.floor(Math.random() * 2 ** 32)) >>> 0;
-    enqueue({
-      prompt: finalPrompt,
-      negativePrompt: negative,
-      mode: 't2v',
-      width,
-      height,
-      durationSeconds: duration,
-      fps,
-      steps,
-      cfg,
-      seed,
-      brandKitId: brandInfuse && kit ? kit.id : undefined,
-      brandKitName: brandInfuse && kit ? kit.name : undefined,
-    });
+    const seeds = variationSeeds(baseSeed, variations);
+    const stagedImageId = startImage ? await saveStagedImage(startImage.blob) : undefined;
+    enqueueMany(
+      seeds.map((seed) => ({
+        prompt: finalPrompt,
+        negativePrompt: negative,
+        mode: stagedImageId ? ('i2v' as const) : ('t2v' as const),
+        stagedImageId,
+        imageStrength: stagedImageId ? imageStrength : undefined,
+        width,
+        height,
+        durationSeconds: duration,
+        fps,
+        steps,
+        cfg,
+        seed,
+        brandKitId: brandInfuse && kit ? kit.id : undefined,
+        brandKitName: brandInfuse && kit ? kit.name : undefined,
+      }))
+    );
     setQueuedFlash(true);
     setTimeout(() => setQueuedFlash(false), 2500);
   };
@@ -81,7 +147,7 @@ export default function StudioPage() {
     <div className="max-w-5xl">
       <PageHeader
         title="Studio"
-        subtitle="Craft a single shot. For batch brand content, use Content Packs."
+        subtitle="Craft a single shot — from a prompt, or bring a picture to life. For batch brand content, use Content Packs."
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -94,6 +160,78 @@ export default function StudioPage() {
               onChange={(e) => setPrompt(e.target.value)}
             />
           </Field>
+
+          {/* Start image → i2v */}
+          <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-ink-200">Start from a picture</div>
+                <p className="mt-0.5 text-xs text-ink-500">
+                  Upload any image and the video grows out of it (image-to-video).
+                </p>
+              </div>
+              {!startImage && (
+                <button className="btn btn-secondary shrink-0" onClick={() => fileInputRef.current?.click()}>
+                  Choose image…
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => pickImage(e.target.files?.[0])}
+            />
+            {startImage && (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={startImage.url}
+                    alt={startImage.name}
+                    className="h-20 w-28 rounded-lg border border-ink-700 object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs text-ink-300">{startImage.name}</div>
+                    <button
+                      className="btn-ghost mt-1 !px-2 !py-1 text-xs"
+                      onClick={() => {
+                        URL.revokeObjectURL(startImage.url);
+                        setStartImage(null);
+                      }}
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                </div>
+                <SliderField
+                  label="Image influence"
+                  value={imageStrength}
+                  min={0.1}
+                  max={1}
+                  step={0.05}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                  onChange={setImageStrength}
+                />
+              </div>
+            )}
+          </div>
+
+          <ChipRow label="Camera move" chips={CAMERA_MOVES} selected={cameraId} onToggle={setCameraId} />
+          <ChipRow label="Style" chips={STYLE_PRESETS} selected={styleId} onToggle={setStyleId} />
+
+          <button
+            type="button"
+            onClick={() => setEnhance((v) => !v)}
+            className={`chip border transition ${
+              enhance
+                ? 'border-accent-500 bg-accent-950/50 text-accent-300'
+                : 'border-ink-700 text-ink-400 hover:border-ink-500'
+            }`}
+          >
+            ✨ Enhance prompt {enhance ? 'on' : 'off'}
+          </button>
 
           <Field label="Negative prompt">
             <textarea
@@ -211,14 +349,29 @@ export default function StudioPage() {
                 onChange={(e) => setSeedText(e.target.value)}
               />
             </Field>
+            <Field label="Variations" hint="Same prompt, different seeds — pick the winner.">
+              <div className="grid grid-cols-3 gap-2">
+                {VARIATION_CHOICES.map((n) => (
+                  <button
+                    key={n}
+                    className={`${variations === n ? 'btn-primary' : 'btn-secondary'} !px-2 !py-2 text-xs`}
+                    onClick={() => setVariations(n)}
+                  >
+                    ×{n}
+                  </button>
+                ))}
+              </div>
+            </Field>
           </div>
 
           <button
             className="btn-primary w-full !py-3.5 text-base"
-            onClick={generate}
+            onClick={() => void generate()}
             disabled={!finalPrompt}
           >
-            {queuedFlash ? '✓ Queued!' : '✦ Generate'}
+            {queuedFlash
+              ? `✓ Queued${variations > 1 ? ` ×${variations}` : ''}!`
+              : `✦ Generate${variations > 1 ? ` ×${variations}` : ''}`}
           </button>
           {status !== 'connected' && (
             <p className="text-center text-xs text-amber-400/90">
